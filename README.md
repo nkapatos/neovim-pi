@@ -3,9 +3,7 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: early implementation — Iteration 1 (transport + adapter).** See
-[docs/PLAN.md](docs/PLAN.md) for the roadmap; implementation starts from
-[docs/START.md](docs/START.md).
+**Status: early implementation — Iteration 1 (transport + adapter).**
 
 ## The one-line architecture
 
@@ -64,11 +62,9 @@ Tasks use [`just`](https://github.com/casey/just): `just --list`, `just verify`
 Tests need `stylua`, `luacheck`, and Neovim on `$PATH`; `just setup-test`
 fetches the dev-only `plenary.nvim` dependency into `.deps/`.
 
-## Documents
+## Roadmap
 
-| Doc | Purpose |
-| --- | --- |
-| [docs/START.md](docs/START.md) | Entry point — start implementing here |
-| [docs/PLAN.md](docs/PLAN.md) | Architecture + phased implementation plan |
-| [docs/RESEARCH.md](docs/RESEARCH.md) | Ecosystem reference/inspiration (not deps) |
-| [docs/HANDOFF.md](docs/HANDOFF.md) | Environment + git workflow for a fresh session |
+Iteration 0 (package skeleton) and Iteration 1 (transport + adapter) are done.
+Next: a usable fresh-session TUI (input buffer, model picker, statusline), then
+CLI-parity launch, resume + extension UI, and rendering fidelity. Pi owns all
+agent state throughout; nvim only renders what Pi reports.

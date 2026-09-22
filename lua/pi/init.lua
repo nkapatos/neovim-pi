@@ -5,7 +5,7 @@
 --- later iterations.
 local M = {}
 
---- Minimum supported Neovim version. Kept in sync with `docs/PLAN.md`.
+--- Minimum supported Neovim version.
 M.MIN_NVIM = "0.12.5"
 
 --- Runtime configuration. Populated by `setup()`.

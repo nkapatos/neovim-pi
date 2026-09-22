@@ -2,7 +2,7 @@ local adapter_mod = require("pi.adapter")
 local protocol = require("pi.protocol")
 
 --- Integration coverage against a real `pi --mode rpc` process. Skipped when
---- `pi` is not on PATH (see docs/PLAN.md testing strategy).
+--- `pi` is not on PATH.
 describe("pi.adapter integration", function()
   if vim.fn.executable("pi") ~= 1 then
     it("SKIP: pi executable not found on PATH", function()
