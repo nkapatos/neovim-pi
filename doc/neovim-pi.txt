@@ -1,0 +1,85 @@
+*neovim-pi.txt*	Neovim as the TUI for the Pi coding-agent harness
+
+==============================================================================
+CONTENTS						*neovim-pi-contents*
+
+  1. Introduction................|neovim-pi-introduction|
+  2. Requirements................|neovim-pi-requirements|
+  3. Installation................|neovim-pi-installation|
+  4. Commands....................|neovim-pi-commands|
+  5. Health......................|neovim-pi-health|
+  6. Configuration...............|neovim-pi-configuration|
+
+==============================================================================
+1. INTRODUCTION					*neovim-pi-introduction*
+
+neovim-pi runs the Pi coding agent (https://github.com/earendil-works/pi) and
+renders its state inside Neovim. Pi owns all agent state (sessions, models,
+tools, approvals); Neovim paints what Pi reports and forwards user input.
+
+This is an early implementation. Version 1 provides the transport and adapter:
+Neovim spawns `pi --mode rpc`, streams assistant text/thinking into a scratch
+buffer, and aborts or shuts the process down. The full chat UX arrives in later
+iterations.
+
+==============================================================================
+2. REQUIREMENTS					*neovim-pi-requirements*
+
+- Neovim >= 0.12.5.					*neovim-pi-nvim*
+- The `pi` executable on `$PATH`.			*neovim-pi-pi*
+- The experimental `ui2` module is used when available; otherwise the legacy
+  messages and cmdline UI is used.
+
+==============================================================================
+3. INSTALLATION					*neovim-pi-installation*
+
+Native package (|packages|). Clone into a `pack/*/start/` directory for
+automatic loading: >sh
+	git clone https://github.com/nkapatos/neovim-pi \
+	  ~/.local/share/nvim/site/pack/core/start/neovim-pi
+<
+Alternatively install into `pack/*/opt/` and load it with |:packadd|: >vim
+	:packadd neovim-pi
+<
+
+With the experimental |vim.pack| manager, add the following to your `init.lua`
+and restart Neovim: >lua
+	vim.pack.add({ 'https://github.com/nkapatos/neovim-pi' })
+<
+
+==============================================================================
+4. COMMANDS					*neovim-pi-commands*
+
+:Pi							*:Pi*
+	Open the chat buffer and start `pi --mode rpc` in the current project
+	directory if it is not already running. One Neovim instance maps to one
+	Pi process.
+
+:PiSend {text}					*:PiSend*
+	Send a prompt to the running agent. Starts a session first if needed.
+
+:PiAbort					*:PiAbort*
+	Abort the current operation (also `<Esc>` in the chat buffer).
+
+:PiStop						*:PiStop*
+	Stop the Pi process by closing its stdin (SIGTERM after a short grace
+	period).
+
+:PiStatus					*:PiStatus*
+	Show plugin and session status.
+
+==============================================================================
+5. HEALTH					*neovim-pi-health*
+
+						*:checkhealth-neovim-pi*
+:checkhealth neovim-pi
+	Report the Neovim version, `ui2` availability, and whether `pi` is on
+	`$PATH`.
+
+==============================================================================
+6. CONFIGURATION				*neovim-pi-configuration*
+
+There are no user options yet. `require('pi').setup({})` is called
+automatically when the plugin loads; calling it again is a no-op.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

@@ -1,0 +1,16 @@
+:Pi	neovim-pi.txt	/*:Pi*
+:PiAbort	neovim-pi.txt	/*:PiAbort*
+:PiSend	neovim-pi.txt	/*:PiSend*
+:PiStatus	neovim-pi.txt	/*:PiStatus*
+:PiStop	neovim-pi.txt	/*:PiStop*
+:checkhealth-neovim-pi	neovim-pi.txt	/*:checkhealth-neovim-pi*
+neovim-pi-commands	neovim-pi.txt	/*neovim-pi-commands*
+neovim-pi-configuration	neovim-pi.txt	/*neovim-pi-configuration*
+neovim-pi-contents	neovim-pi.txt	/*neovim-pi-contents*
+neovim-pi-health	neovim-pi.txt	/*neovim-pi-health*
+neovim-pi-installation	neovim-pi.txt	/*neovim-pi-installation*
+neovim-pi-introduction	neovim-pi.txt	/*neovim-pi-introduction*
+neovim-pi-nvim	neovim-pi.txt	/*neovim-pi-nvim*
+neovim-pi-pi	neovim-pi.txt	/*neovim-pi-pi*
+neovim-pi-requirements	neovim-pi.txt	/*neovim-pi-requirements*
+neovim-pi.txt	neovim-pi.txt	/*neovim-pi.txt*

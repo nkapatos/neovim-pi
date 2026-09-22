@@ -1,0 +1,43 @@
+local adapter = require("pi.adapter")
+
+describe("pi.adapter JSONL framing", function()
+  it("splits complete records in one chunk", function()
+    local records, rest = adapter.feed("", '{"a":1}\n{"b":2}\n')
+    assert.same({ '{"a":1}', '{"b":2}' }, records)
+    assert.equal("", rest)
+  end)
+
+  it("retains a partial trailing record across chunks", function()
+    local records, rest = adapter.feed("", '{"a":')
+    assert.same({}, records)
+    assert.equal('{"a":', rest)
+
+    records, rest = adapter.feed(rest, "1}\n")
+    assert.same({ '{"a":1}' }, records)
+    assert.equal("", rest)
+  end)
+
+  it("strips a single trailing CR from CRLF input", function()
+    local records = adapter.feed("", '{"a":1}\r\n')
+    assert.same({ '{"a":1}' }, records)
+  end)
+
+  it("does not treat U+2028/U+2029 as delimiters", function()
+    local ls, ps = vim.fn.nr2char(0x2028), vim.fn.nr2char(0x2029)
+    local records, rest = adapter.feed("", '{"text":"a' .. ls .. "b" .. ps .. 'c"}\n')
+    assert.equal(1, #records)
+    assert.equal("", rest)
+    assert.equal('{"text":"a' .. ls .. "b" .. ps .. 'c"}', records[1])
+  end)
+
+  it("yields empty records for blank lines", function()
+    assert.same({ "", "" }, adapter.feed("", "\n\n"))
+  end)
+
+  it("encodes exactly one line per command", function()
+    local line = adapter.encode({ type = "prompt", message = "hi" })
+    local _, newlines = line:gsub("\n", "")
+    assert.equal(1, newlines)
+    assert.equal("prompt", vim.json.decode(line).type)
+  end)
+end)

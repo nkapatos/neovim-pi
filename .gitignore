@@ -1,0 +1,2 @@
+# Dev-only test dependency, fetched by `just setup-test`.
+/.deps/
