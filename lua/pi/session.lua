@@ -4,6 +4,7 @@
 --- Pi session. This module is the thin glue between the transport and the UI.
 local adapter = require("pi.adapter")
 local protocol = require("pi.protocol")
+local launch = require("pi.launch")
 local chat = require("pi.ui.chat")
 local input = require("pi.ui.input")
 
@@ -18,6 +19,9 @@ local state = {
   streaming = false,
   exit_code = nil,
   info = nil,
+  spec = nil,
+  cwd = nil,
+  cmd = nil,
 }
 
 local function ensure_cleanup_autocmd()
@@ -46,24 +50,27 @@ end
 local function ensure_layout()
   local chat_buf = state.chat:ensure_buffer()
 
-  if state.input_win and vim.api.nvim_win_is_valid(state.input_win) then
-    render_statusline()
-    vim.api.nvim_set_current_win(state.input_win)
-    vim.cmd("startinsert!")
-    return
+  if not (state.chat_win and vim.api.nvim_win_is_valid(state.chat_win)) then
+    if state.input_win and vim.api.nvim_win_is_valid(state.input_win) then
+      vim.api.nvim_set_current_win(state.input_win)
+      vim.cmd("aboveleft split")
+    end
+    state.chat_win = vim.api.nvim_get_current_win()
   end
-
-  vim.api.nvim_win_set_buf(0, chat_buf)
-  state.chat_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(state.chat_win, chat_buf)
   vim.wo[state.chat_win].number = false
   vim.wo[state.chat_win].signcolumn = "no"
   vim.wo[state.chat_win].wrap = true
 
-  vim.cmd(("botright %dsplit"):format(state.input.height))
-  state.input_win = vim.api.nvim_get_current_win()
+  if not (state.input_win and vim.api.nvim_win_is_valid(state.input_win)) then
+    vim.api.nvim_set_current_win(state.chat_win)
+    vim.cmd(("botright %dsplit"):format(state.input.height))
+    state.input_win = vim.api.nvim_get_current_win()
+  end
   state.input:attach_window(state.input_win)
 
   render_statusline()
+  vim.api.nvim_set_current_win(state.input_win)
   vim.cmd("startinsert!")
 end
 
@@ -87,6 +94,10 @@ function M.start(opts)
   state.streaming = false
   state.info = nil
 
+  state.spec = opts.launch or { session = "new" }
+  state.cwd = opts.cwd or launch.root(opts.buf or 0, opts.root_markers)
+  state.cmd = opts.cmd or launch.argv(state.spec)
+
   chat.setup_highlights()
 
   state.chat = chat.new()
@@ -100,8 +111,8 @@ function M.start(opts)
   })
 
   state.adapter = adapter.new({
-    cmd = opts.cmd,
-    cwd = opts.cwd or vim.fn.getcwd(),
+    cmd = state.cmd,
+    cwd = state.cwd,
     env = opts.env,
     on_event = function(event)
       M._on_event(event)
@@ -131,6 +142,20 @@ function M.open(opts)
   end
   ensure_layout()
   return state
+end
+
+--- Stop any running session, then start and focus a new one.
+---
+--- @param opts table?
+--- @return table state
+function M.restart(opts)
+  if M.is_active() then
+    M.stop()
+    vim.wait(5000, function()
+      return not M.is_active()
+    end, 50)
+  end
+  return M.open(opts)
 end
 
 --- Send a prompt to the agent.
@@ -241,6 +266,32 @@ function M.select_model()
       )
     end)
   end)
+end
+
+--- @return string|nil Launch cwd of the running session.
+function M.cwd()
+  return state.cwd
+end
+
+--- @return string|nil Shell-quoted command line of the running session.
+function M.command()
+  if not state.spec then
+    return nil
+  end
+  return launch.describe(state.spec)
+end
+
+--- @return table|nil Launch spec of the running session.
+function M.launch_spec()
+  return state.spec
+end
+
+--- @return table|nil Effective project-trust description for the session.
+function M.trust()
+  if not state.spec then
+    return nil
+  end
+  return launch.trust(state.spec, state.cwd)
 end
 
 --- @return string

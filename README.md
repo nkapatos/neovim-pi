@@ -3,7 +3,7 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: early implementation — Iteration 2 (usable TUI).**
+**Status: early implementation — Iteration 3 (CLI-parity launch).**
 
 ## The one-line architecture
 
@@ -49,14 +49,20 @@ the plugin loaded.
 
 ## Usage
 
-`:Pi` opens the chat + input layout and starts `pi --mode rpc` in the current
-project directory if it is not already running. Compose a prompt in the input
-buffer and send with `<C-s>` (insert) or `<CR>` (normal mode); `<CR>` in insert
-inserts a newline. `:PiSend {text}` sends directly, `:PiAbort` (or `<Esc>` in the
-chat buffer) aborts, `:PiModel` switches models, and `:PiStop` shuts Pi down.
-The assistant transcript renders text, thinking, and tool calls distinctly, and
-the statusline shows the model, thinking level, and streaming state. Pi owns all
+`:Pi` opens the chat + input layout and starts `pi --mode rpc` in the resolved
+project root if it is not already running. Compose a prompt in the input buffer
+and send with `<C-s>` (insert) or `<CR>` (normal mode); `<CR>` in insert inserts
+a newline. `:PiSend {text}` sends directly, `:PiAbort` (or `<Esc>` in the chat
+buffer) aborts, `:PiModel` switches models, and `:PiStop` shuts Pi down. The
+assistant transcript renders text, thinking, and tool calls distinctly, and the
+statusline shows the model, thinking level, and streaming state. Pi owns all
 session state; Neovim only renders what it reports.
+
+`:PiStart` opens an interactive launch builder (session, trust, model, tools,
+name) and shows the exact command before starting. `:PiCmd` prints the resolved
+`pi …` command, cwd, and trust; `:PiTrust` reports the effective project-trust
+decision. The spawn cwd is found LSP-style from markers (`.git`, `.pi`,
+`package.json`, …), configurable via `setup({ launch = {...}, root_markers = {...} })`.
 
 ## Development
 
