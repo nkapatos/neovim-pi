@@ -17,10 +17,10 @@ neovim-pi runs the Pi coding agent (https://github.com/earendil-works/pi) and
 renders its state inside Neovim. Pi owns all agent state (sessions, models,
 tools, approvals); Neovim paints what Pi reports and forwards user input.
 
-This is an early implementation. Version 1 provides the transport and adapter:
-Neovim spawns `pi --mode rpc`, streams assistant text/thinking into a scratch
-buffer, and aborts or shuts the process down. The full chat UX arrives in later
-iterations.
+This is an early implementation. Neovim spawns `pi --mode rpc`, renders the
+streaming transcript (assistant text, thinking, and tool calls) in a scratch
+buffer, and provides a real input buffer to compose prompts. Pi owns all
+session state; Neovim only renders what Pi reports.
 
 ==============================================================================
 2. REQUIREMENTS					*neovim-pi-requirements*
@@ -51,9 +51,9 @@ and restart Neovim: >lua
 4. COMMANDS					*neovim-pi-commands*
 
 :Pi							*:Pi*
-	Open the chat buffer and start `pi --mode rpc` in the current project
-	directory if it is not already running. One Neovim instance maps to one
-	Pi process.
+	Open the chat + input layout (chat on top, input below) and start
+	`pi --mode rpc` in the current project directory if it is not already
+	running. One Neovim instance maps to one Pi process.
 
 :PiSend {text}					*:PiSend*
 	Send a prompt to the running agent. Starts a session first if needed.
@@ -61,12 +61,30 @@ and restart Neovim: >lua
 :PiAbort					*:PiAbort*
 	Abort the current operation (also `<Esc>` in the chat buffer).
 
+:PiModel					*:PiModel*
+	Pick a model with `vim.ui.select` (built from `get_available_models`)
+	and switch the running session to it.
+
 :PiStop						*:PiStop*
 	Stop the Pi process by closing its stdin (SIGTERM after a short grace
 	period).
 
 :PiStatus					*:PiStatus*
 	Show plugin and session status.
+
+The session statusline shows the current model, thinking level, and whether the
+agent is idle or streaming.
+
+==============================================================================
+4a. INPUT BUFFER				*neovim-pi-input*
+
+The input is a normal Neovim buffer (multi-line aware), not a one-line prompt:
+
+- In insert mode, `<CR>` inserts a newline and `<C-s>` sends.
+- In normal mode, `<CR>` sends.
+- `<C-c>` returns to normal mode. `<Esc>` in the chat window aborts.
+
+If your terminal swallows `<C-s>` (XOFF), use `<Esc>` then `<CR>` to send.
 
 ==============================================================================
 5. HEALTH					*neovim-pi-health*

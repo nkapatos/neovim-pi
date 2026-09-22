@@ -15,6 +15,19 @@ describe("pi.protocol", function()
     assert.same({ type = "get_state" }, protocol.command("get_state"))
   end)
 
+  it("builds model and session commands", function()
+    assert.same({ type = "get_available_models" }, protocol.command("get_available_models"))
+    assert.same({
+      type = "set_model",
+      provider = "anthropic",
+      modelId = "claude-sonnet-4",
+    }, protocol.command("set_model", { provider = "anthropic", model_id = "claude-sonnet-4" }))
+    assert.same({
+      type = "switch_session",
+      sessionPath = "/tmp/s.jsonl",
+    }, protocol.command("switch_session", { session_path = "/tmp/s.jsonl" }))
+  end)
+
   it("returns an error for unknown operations", function()
     local cmd, err = protocol.command("nope", {})
     assert.is_nil(cmd)

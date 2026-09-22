@@ -1,24 +1,31 @@
---- Minimal streaming chat buffer for Iteration 1.
+--- Streaming chat buffer rendering.
 ---
 --- Deltas are coalesced and flushed on `vim.schedule`, so a burst of streaming
---- events results in a single buffer update. This is deliberately small; the
---- full chat UX arrives in Iteration 2.
+--- events results in a single buffer update. Blocks are highlighted by kind
+--- (assistant text, thinking, tool calls) via extmarks over the appended range.
 local protocol = require("pi.protocol")
 
 local M = {}
+
+--- Namespace for chat highlight extmarks.
+M.ns = vim.api.nvim_create_namespace("pi.chat")
 
 local Chat = {}
 Chat.__index = Chat
 M.Chat = Chat
 
---- @return table chat
-function M.new()
-  return setmetatable({
-    buf = nil,
-    on_abort = function() end,
-    _pending = "",
-    _flush_scheduled = false,
-  }, Chat)
+--- Define the plugin's highlight groups (non-destructive defaults).
+function M.setup_highlights()
+  local function link(name, to)
+    vim.api.nvim_set_hl(0, name, { link = to, default = true })
+  end
+  link("PiText", "Normal")
+  link("PiThinking", "Comment")
+  link("PiTool", "Function")
+  link("PiToolOk", "DiagnosticOk")
+  link("PiToolError", "DiagnosticError")
+  link("PiUser", "Title")
+  link("PiError", "ErrorMsg")
 end
 
 --- Append `text` to the end of `buf`, continuing the last line if needed.
@@ -38,13 +45,46 @@ local function append_text(buf, text)
   end
 end
 
+--- Apply a highlight extmark over a buffer range.
+---
+--- @param buf integer
+--- @param start_row integer
+--- @param start_col integer
+--- @param end_row integer
+--- @param end_col integer
+--- @param hl string
+local function highlight(buf, start_row, start_col, end_row, end_col, hl)
+  if start_row == end_row and end_col <= start_col then
+    return
+  end
+  pcall(vim.api.nvim_buf_set_extmark, buf, M.ns, start_row, start_col, {
+    end_row = end_row,
+    end_col = end_col,
+    hl_group = hl,
+    priority = 100,
+  })
+end
+
+--- @param opts table?
+--- @return table chat
+function M.new(opts)
+  opts = opts or {}
+  return setmetatable({
+    buf = nil,
+    on_abort = opts.on_abort or function() end,
+    _pending = "",
+    _pending_hl = nil,
+    _flush_scheduled = false,
+  }, Chat)
+end
+
 --- @return integer bufnr
 function Chat:ensure_buffer()
   if self.buf and vim.api.nvim_buf_is_valid(self.buf) then
     return self.buf
   end
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, ("pi://%d"):format(buf))
+  vim.api.nvim_buf_set_name(buf, ("pi://chat/%d"):format(buf))
   vim.bo[buf].filetype = "pi-chat"
   vim.bo[buf].bufhidden = "hide"
   self.buf = buf
@@ -67,7 +107,6 @@ function Chat:_map_keys(buf)
   vim.keymap.set("n", "<Esc>", function()
     self.on_abort()
   end, { buffer = buf, desc = "pi: abort current operation" })
-  vim.keymap.set("n", "q", "<cmd>close<cr>", { buffer = buf, desc = "pi: close chat window" })
 end
 
 --- Handle one unified event.
@@ -76,19 +115,25 @@ end
 function Chat:on_event(event)
   local kind = event.type
   if kind == protocol.EVENT.TEXT_DELTA then
-    self:_push(event.text or "")
+    self:_push(event.text or "", "PiText")
   elseif kind == protocol.EVENT.THINKING_DELTA then
-    self:_push(event.text or "")
+    self:_push(event.text or "", "PiThinking")
   elseif kind == protocol.EVENT.TOOL_START then
-    self:_push(("\n\n[%s]\n"):format(event.name or "tool"))
+    self:_push(("\n▸ %s\n"):format(event.name or "tool"), "PiTool")
   elseif kind == protocol.EVENT.TOOL_END then
-    self:_push(("\n[%s %s]\n"):format(event.name or "tool", event.is_error and "failed" or "done"))
+    local mark = event.is_error and "✗" or "✓"
+    self:_push(
+      ("  %s %s\n"):format(mark, event.name or "tool"),
+      event.is_error and "PiToolError" or "PiToolOk"
+    )
+  elseif kind == protocol.EVENT.TURN_END then
+    self:_ensure_newline()
   elseif kind == protocol.EVENT.SETTLED then
-    self:_push("\n")
+    self:_ensure_newline()
   elseif kind == protocol.EVENT.READY then
-    self:_push("pi session attached\n")
+    self:_push("pi session attached\n", "PiTool")
   elseif kind == protocol.EVENT.EXIT then
-    self:_push(("\n[pi exited: code=%s signal=%s]\n"):format(event.code, event.signal))
+    self:_push(("\n[pi exited: code=%s signal=%s]\n"):format(event.code, event.signal), "PiError")
   elseif kind == protocol.EVENT.STATUS then
     vim.notify(
       event.message or "pi status",
@@ -97,14 +142,48 @@ function Chat:on_event(event)
   end
 end
 
---- Queue text and schedule a coalesced flush.
+--- Echo a user prompt into the transcript.
 ---
 --- @param text string
-function Chat:_push(text)
-  if text == "" then
+function Chat:message(text)
+  self:_ensure_newline()
+  self:_push(("› %s\n"):format(text), "PiUser")
+end
+
+--- Whether the transcript currently ends on a fresh line.
+---
+--- @return boolean
+function Chat:_ends_with_newline()
+  if self._pending ~= "" then
+    return self._pending:sub(-1) == "\n"
+  end
+  if not self.buf or not vim.api.nvim_buf_is_valid(self.buf) then
+    return true
+  end
+  local count = vim.api.nvim_buf_line_count(self.buf)
+  local last = vim.api.nvim_buf_get_lines(self.buf, count - 1, count, false)[1]
+  return last == nil or last == ""
+end
+
+function Chat:_ensure_newline()
+  if not self:_ends_with_newline() then
+    self:_push("\n", nil)
+  end
+end
+
+--- Queue text (with an optional highlight group) and schedule a coalesced flush.
+---
+--- @param text string
+--- @param hl string|nil
+function Chat:_push(text, hl)
+  if text == nil or text == "" then
     return
   end
+  if self._pending ~= "" and self._pending_hl ~= hl then
+    self:_flush()
+  end
   self._pending = self._pending .. text
+  self._pending_hl = hl
   if self._flush_scheduled then
     return
   end
@@ -117,12 +196,27 @@ end
 
 function Chat:_flush()
   local text = self._pending
+  local hl = self._pending_hl
   self._pending = ""
+  self._pending_hl = nil
   if text == "" then
     return
   end
+
   local buf = self:ensure_buffer()
+  local before = vim.api.nvim_buf_line_count(buf)
+  local last = vim.api.nvim_buf_get_lines(buf, before - 1, before, false)[1] or ""
+  local start_row, start_col = before - 1, #last
+
   append_text(buf, text)
+
+  if hl then
+    local after = vim.api.nvim_buf_line_count(buf)
+    local end_row = after - 1
+    local end_line = vim.api.nvim_buf_get_lines(buf, end_row, end_row + 1, false)[1] or ""
+    highlight(buf, start_row, start_col, end_row, #end_line, hl)
+  end
+
   self:_scroll_to_end()
 end
 
