@@ -51,11 +51,55 @@ Unified vocabulary (nvim-facing, Pi-agnostic):
 
 (Full Pi RPC surface is summarized in §10; the adapter maps it to the above.)
 
+## 3a. Transport rationale — stdio JSONL now, nvim RPC later (as a second channel)
+
+nvim ↔ Pi uses Pi's native headless protocol: `pi --mode rpc`, JSONL over the
+child process's stdin/stdout. Why this boundary and not Neovim's own IPC/RPC:
+
+- It is Pi's intended embedding surface and carries the full event surface
+  (streaming deltas, tool lifecycle, compaction/retry, extension-UI dialogs).
+- No Pi-side change, bridge, or fork; stdio is universal and dependency-free.
+- Neovim IPC/RPC (msgpack-RPC over a socket, or `jobstart({ rpc = true })`) is a
+  poor fit here: Pi does not speak msgpack and exposes no documented
+  socket-client mode, so using it would force a bridge or invert the
+  architecture (Pi connecting out to a listening nvim), contradicting "Pi owns
+  state; nvim is a thin renderer". It buys no capability for this link.
+
+The `pi.adapter` / `pi.protocol` seam keeps the transport swappable: an ACP or
+socket adapter can be added later without changing the unified vocabulary.
+
+### Future: pushing rich context nvim → Pi
+
+Later iterations need to send more than a prompt string — buffer contents or
+selections ("chunks"), diagnostics, error messages, and other editor context.
+Two layers, in order:
+
+1. **Prompt expansion (default, no Pi change).** nvim resolves context
+   references (`#buffer`, `#selection`, `#diagnostics`, `#file:path`; see
+   `docs/RESEARCH.md`) into the `prompt` message before sending. This works with
+   today's RPC surface.
+2. **Structured context (deferred).** If Pi grows a structured
+   context/attachment channel (or a Pi extension provides one), the adapter maps
+   it through the same unified vocabulary. Do not fork Pi for this.
+
+### Future: Pi using nvim remotely ("nvim as a service")
+
+Mid/long term, Pi (or a Pi extension) may want native editor capabilities —
+open a diff, set marks, apply edits to live buffers, query state — instead of
+the generic extension-UI sub-protocol. That is where Neovim IPC/RPC *is* the
+right tool: expose an outbound control channel (e.g. `:PiServe` / `nvim
+--listen` / the `$NVIM` socket) that Pi can connect to and call `nvim_*` APIs
+on. This is **additive** to the JSONL agent link, not a replacement: keep the
+agent transport as-is and add the editor-control surface alongside it.
+
 ## 4. Dependency policy: built-ins first
 
 Layer 0 — **required, built-in nvim 0.12.5 only:**
 
-- `jobstart` / `chansend` / `jobstop` (Pi child process + JSONL framing)
+- `vim.system` for the Pi child process: raw byte stdout (strict JSONL
+  framing), with parsing deferred to `vim.schedule` because its callbacks run
+  in a fast-event context (§3a). `jobstart`/`chansend`/`jobstop` remain a
+  fallback if `vim.system` proves insufficient.
 - `vim.ui.select` / `vim.ui.input` / `vim.notify` (built-in indirection points;
   users may remap these themselves — we do not hard-depend on any picker)
 - floating windows (`nvim_open_win`) + `buf`/`win` APIs (chat buffer, diffs)
