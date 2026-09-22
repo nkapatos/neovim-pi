@@ -61,8 +61,9 @@ session state; Neovim only renders what it reports.
 `:PiStart` opens an interactive launch builder (session, trust, model, tools,
 name) and shows the exact command before starting. `:PiCmd` prints the resolved
 `pi …` command, cwd, and trust; `:PiTrust` reports the effective project-trust
-decision. The spawn cwd is found LSP-style from markers (`.git`, `.pi`,
-`package.json`, …), configurable via `setup({ launch = {...}, root_markers = {...} })`.
+decision. A project `.pi` directory wins root resolution (Pi reads project
+settings from `cwd/.pi`); otherwise generic markers (`.git`, `package.json`, …)
+are used, configurable via `setup({ launch = {...}, root_markers = {...} })`.
 
 ## Development
 

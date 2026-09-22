@@ -109,6 +109,27 @@ describe("pi.launch root", function()
     local root = launch.root(tmp .. "/loose/file.txt", { ".git" })
     assert.equal("loose", vim.fn.fnamemodify(root, ":t"))
   end)
+
+  it("prefers the nearest .pi over generic markers", function()
+    local tmp = vim.fn.tempname()
+    vim.fn.mkdir(tmp .. "/proj/.git", "p")
+    vim.fn.mkdir(tmp .. "/proj/pkg/.pi/agent", "p")
+    vim.fn.writefile({}, tmp .. "/proj/pkg/file.txt")
+
+    local root = launch.root(tmp .. "/proj/pkg/file.txt", { ".git" })
+    assert.equal("pkg", vim.fn.fnamemodify(root, ":t"))
+  end)
+
+  it("does not treat $HOME/.pi (global config) as a project marker", function()
+    local tmp = vim.fn.tempname()
+    local home = tmp .. "/home"
+    vim.fn.mkdir(home .. "/.pi/agent", "p")
+    vim.fn.mkdir(home .. "/proj/sub", "p")
+    vim.fn.writefile({}, home .. "/proj/sub/file.txt")
+
+    local root = launch.root(home .. "/proj/sub/file.txt", { ".git" }, home)
+    assert.equal("sub", vim.fn.fnamemodify(root, ":t"))
+  end)
 end)
 
 describe("pi.launch trust", function()

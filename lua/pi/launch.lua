@@ -6,10 +6,13 @@
 local M = {}
 
 --- Markers used LSP-style to find the project root.
+---
+--- `.pi` is handled separately and wins: Pi reads project settings from
+--- `cwd/.pi`, not from an ancestor, so the spawn cwd should be the directory
+--- that owns the nearest `.pi`.
 M.DEFAULT_ROOT_MARKERS = {
   ".git",
   ".hg",
-  ".pi",
   "package.json",
   "pyproject.toml",
   "Cargo.toml",
@@ -17,12 +20,54 @@ M.DEFAULT_ROOT_MARKERS = {
   "Makefile",
 }
 
+--- Directory name that marks a Pi project root.
+M.PI_DIR = ".pi"
+
+--- @param name string|nil
+--- @return string
+local function start_dir_of(name)
+  if name and name ~= "" then
+    if vim.fn.isdirectory(name) == 1 then
+      return vim.fn.fnamemodify(name, ":p")
+    end
+    return vim.fn.fnamemodify(name, ":p:h")
+  end
+  return vim.fn.getcwd()
+end
+
+--- Nearest ancestor (including `start_dir`) that owns a `.pi` directory.
+--- `$HOME` is skipped: `~/.pi` is Pi's global config, not a project marker.
+---
+--- @param start_dir string
+--- @param home string|nil
+--- @return string|nil
+local function nearest_pi_root(start_dir, home)
+  home = vim.fn.fnamemodify(home or vim.fn.expand("~"), ":p")
+  local dir = vim.fn.fnamemodify(start_dir, ":p")
+  while dir ~= "" do
+    local is_home = vim.fn.fnamemodify(dir, ":p") == home
+    if not is_home and vim.fn.isdirectory(dir .. "/" .. M.PI_DIR) == 1 then
+      return (dir:gsub("/$", ""))
+    end
+    local parent = vim.fs.dirname(dir)
+    if parent == nil or parent == dir then
+      break
+    end
+    dir = parent
+  end
+  return nil
+end
+
 --- Resolve the project root for a buffer or path using markers.
+---
+--- `.pi` wins over generic markers (see `M.PI_DIR`). Generic markers are then
+--- tried nearest-ancestor-first. Falls back to the file's directory, then cwd.
 ---
 --- @param source integer|string|nil Buffer number (default 0) or path.
 --- @param markers string[]|nil
+--- @param home string|nil Override `$HOME` (mainly for tests).
 --- @return string
-function M.root(source, markers)
+function M.root(source, markers, home)
   markers = markers or M.DEFAULT_ROOT_MARKERS
   source = source or 0
 
@@ -33,15 +78,18 @@ function M.root(source, markers)
     name = source
   end
 
-  local start = (name ~= nil and name ~= "") and name or vim.fn.getcwd()
-  local root = vim.fs.root(start, markers)
+  local dir = start_dir_of(name)
+
+  local pi_root = nearest_pi_root(dir, home)
+  if pi_root then
+    return pi_root
+  end
+
+  local root = vim.fs.root(dir, markers)
   if root then
     return root
   end
-  if name ~= nil and name ~= "" then
-    return vim.fn.fnamemodify(name, ":p:h")
-  end
-  return vim.fn.getcwd()
+  return dir
 end
 
 --- @param argv string[]

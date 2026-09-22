@@ -101,9 +101,12 @@ If your terminal swallows `<C-s>` (XOFF), use `<Esc>` then `<CR>` to send.
 ==============================================================================
 4b. LAUNCH & PROJECT ROOT			*neovim-pi-launch*
 
-The spawn cwd is resolved LSP-style: the nearest ancestor of the current buffer
-(or the cwd) containing a marker (`.git`, `.hg`, `.pi`, `package.json`,
-`pyproject.toml`, `Cargo.toml`, `go.mod`, `Makefile`). Override the markers with
+The spawn cwd is resolved LSP-style. A project `.pi` directory wins (Pi reads
+project settings from `cwd/.pi`, so the spawn cwd must own the nearest `.pi`);
+`$HOME/.pi` is ignored because that is Pi's global config, not a project marker.
+Otherwise the nearest ancestor of the current buffer (or the cwd) containing a
+generic marker (`.git`, `.hg`, `package.json`, `pyproject.toml`, `Cargo.toml`,
+`go.mod`, `Makefile`) is used. Override the generic markers with
 `require('pi').setup({ root_markers = { ... } })`.
 
 The launch spec mirrors Pi's flags and is configurable with
