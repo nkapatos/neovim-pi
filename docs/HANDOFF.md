@@ -5,12 +5,23 @@ For the next session/agent continuing this work.
 ## 1. Where things stand
 
 - **Research complete** — `docs/RESEARCH.md` (reference/inspiration only).
-- **Plan drafted** — `docs/PLAN.md` (draft, under PR review).
-- **Entry point for implementation** — `docs/START.md` (read this first; it
-  says exactly what Iteration 0 is).
-- **No implementation code exists** (deliberately). Any adapter scaffold from
-  earlier exploratory discussion was removed and must not be reused without
-  re-reviewing against `docs/PLAN.md`.
+- **Plan** — `docs/PLAN.md` (merged to `main`).
+- **Iteration 0 merged** — package skeleton: load guard (>= 0.12.5), guarded
+  `ui2`, `:checkhealth neovim-pi`, `doc/`, and a `justfile`.
+- **Iteration 1 implemented** — `pi.adapter` (spawns `pi --mode rpc`, strict
+  JSONL framing, id correlation), `pi.protocol` (unified vocabulary), a minimal
+  streaming chat buffer, and `:Pi` / `:PiSend` / `:PiAbort` / `:PiStop` /
+  `:PiStatus`. Unit specs, a real-process integration spec, and `just verify`.
+- **Next: Iteration 2** — usable fresh-session TUI (real input buffer, model
+  picker, statusline).
+
+## 1a. Working notes
+
+- `just` (mise), `stylua`, `luacheck`, and Neovim 0.12.5 are needed for local
+  checks. `just setup-test` fetches `plenary.nvim` into gitignored `.deps/`.
+- The adapter uses `vim.system` (not `jobstart`) because Pi requires strict
+  byte-level JSONL framing; `vim.system` stdout runs in a fast-event context,
+  so parsing is deferred with `vim.schedule`.
 
 ## 2. Git workflow (hard rule)
 
@@ -67,8 +78,6 @@ gh pr create --base main --head <branch> --title "..." --body "..."
 
 ## 6. Next actions (ordered)
 
-1. Review the open PR for `docs/` (planning updates).
-2. On approval, start **Iteration 0** per `docs/START.md` on a new branch
-   `iter/0-pack-skeleton`, open a PR.
-3. Then Iteration 1 (adapter/transport) with plenary unit + integration tests,
-   plus the `justfile` tasks.
+1. Start **Iteration 2** per `docs/PLAN.md` on a new branch (real input buffer,
+   model picker, statusline), open a PR.
+2. Then Iteration 3 (CLI-parity launch) and beyond.

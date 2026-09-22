@@ -17,8 +17,10 @@ neovim-pi runs the Pi coding agent (https://github.com/earendil-works/pi) and
 renders its state inside Neovim. Pi owns all agent state (sessions, models,
 tools, approvals); Neovim paints what Pi reports and forwards user input.
 
-This is an early implementation: version 0 is the package skeleton only. The
-adapter and UI arrive in later iterations.
+This is an early implementation. Version 1 provides the transport and adapter:
+Neovim spawns `pi --mode rpc`, streams assistant text/thinking into a scratch
+buffer, and aborts or shuts the process down. The full chat UX arrives in later
+iterations.
 
 ==============================================================================
 2. REQUIREMENTS					*neovim-pi-requirements*
@@ -49,8 +51,22 @@ and restart Neovim: >lua
 4. COMMANDS					*neovim-pi-commands*
 
 :Pi							*:Pi*
-	Placeholder command. Reports whether the plugin loaded. Real agent
-	commands are added in later iterations.
+	Open the chat buffer and start `pi --mode rpc` in the current project
+	directory if it is not already running. One Neovim instance maps to one
+	Pi process.
+
+:PiSend {text}					*:PiSend*
+	Send a prompt to the running agent. Starts a session first if needed.
+
+:PiAbort					*:PiAbort*
+	Abort the current operation (also `<Esc>` in the chat buffer).
+
+:PiStop						*:PiStop*
+	Stop the Pi process by closing its stdin (SIGTERM after a short grace
+	period).
+
+:PiStatus					*:PiStatus*
+	Show plugin and session status.
 
 ==============================================================================
 5. HEALTH					*neovim-pi-health*

@@ -105,4 +105,41 @@ function M.status()
   )
 end
 
+--- Open the chat session, starting Pi if needed.
+--- @param opts table?
+--- @return table
+function M.open(opts)
+  return require("pi.session").open(opts)
+end
+
+--- Start a Pi session without focusing the buffer.
+--- @param opts table?
+--- @return table state
+--- @return string|nil error
+function M.start(opts)
+  return require("pi.session").start(opts)
+end
+
+--- Send a prompt to the running agent.
+--- @param text string
+function M.prompt(text)
+  return require("pi.session").prompt(text)
+end
+
+--- Abort the current operation.
+function M.abort()
+  return require("pi.session").abort()
+end
+
+--- Stop the Pi process.
+function M.stop()
+  return require("pi.session").stop()
+end
+
+--- Status of the current session.
+--- @return string
+function M.session_status()
+  return require("pi.session").status()
+end
+
 return M

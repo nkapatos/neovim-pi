@@ -34,5 +34,22 @@ end
 pi.setup()
 
 vim.api.nvim_create_user_command("Pi", function()
-  vim.notify(require("pi").status(), vim.log.levels.INFO)
-end, { desc = "neovim-pi: show plugin status (placeholder)" })
+  require("pi").open()
+end, { desc = "pi: open the chat session (starting Pi if needed)" })
+
+vim.api.nvim_create_user_command("PiSend", function(args)
+  require("pi").prompt(args.args)
+end, { nargs = "+", desc = "pi: send a prompt to the running agent" })
+
+vim.api.nvim_create_user_command("PiAbort", function()
+  require("pi").abort()
+end, { desc = "pi: abort the current operation" })
+
+vim.api.nvim_create_user_command("PiStop", function()
+  require("pi").stop()
+end, { desc = "pi: stop the Pi process" })
+
+vim.api.nvim_create_user_command("PiStatus", function()
+  local pi_mod = require("pi")
+  vim.notify(pi_mod.status() .. "\n" .. pi_mod.session_status(), vim.log.levels.INFO)
+end, { desc = "pi: show plugin and session status" })

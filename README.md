@@ -3,7 +3,7 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: early implementation — Iteration 0 (package skeleton).** See
+**Status: early implementation — Iteration 1 (transport + adapter).** See
 [docs/PLAN.md](docs/PLAN.md) for the roadmap; implementation starts from
 [docs/START.md](docs/START.md).
 
@@ -48,6 +48,14 @@ vim.pack.add({ 'https://github.com/nkapatos/neovim-pi' })
 
 Run `:checkhealth neovim-pi` to verify the environment, and `:Pi` to confirm
 the plugin loaded.
+
+## Usage (Iteration 1)
+
+`:Pi` opens the chat scratch buffer and starts `pi --mode rpc` in the current
+project directory if it is not already running. `:PiSend {text}` sends a prompt,
+`:PiAbort` (or `<Esc>` in the chat buffer) aborts the current operation, and
+`:PiStop` shuts the Pi process down. Pi owns all session state; Neovim only
+renders what it reports.
 
 ## Development
 
