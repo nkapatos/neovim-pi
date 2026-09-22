@@ -3,7 +3,8 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: research & planning.** Implementation starts from
+**Status: early implementation — Iteration 0 (package skeleton).** See
+[docs/PLAN.md](docs/PLAN.md) for the roadmap; implementation starts from
 [docs/START.md](docs/START.md).
 
 ## The one-line architecture
@@ -24,6 +25,36 @@ session storage and never re-derives agent state.
   `:packadd`).
 - **Workflow:** no pushes to `main`; all work on a branch, push the branch, open
   a PR for review.
+
+## Install
+
+Requires Neovim >= 0.12.5 and `pi` on `$PATH`.
+
+Native `pack/` (auto-loaded from `pack/*/start/`):
+
+```sh
+git clone https://github.com/nkapatos/neovim-pi \
+  ~/.local/share/nvim/site/pack/core/start/neovim-pi
+```
+
+Or from `pack/*/opt/` with `:packadd neovim-pi`.
+
+With the experimental `vim.pack` manager (Neovim 0.12), add to `init.lua` and
+restart:
+
+```lua
+vim.pack.add({ 'https://github.com/nkapatos/neovim-pi' })
+```
+
+Run `:checkhealth neovim-pi` to verify the environment, and `:Pi` to confirm
+the plugin loaded.
+
+## Development
+
+Tasks use [`just`](https://github.com/casey/just): `just --list`, `just verify`
+(format + lint + headless smoke tests + plenary tests + `pack/` install test).
+Tests need `stylua`, `luacheck`, and Neovim on `$PATH`; `just setup-test`
+fetches the dev-only `plenary.nvim` dependency into `.deps/`.
 
 ## Documents
 
