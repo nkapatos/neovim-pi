@@ -1,5 +1,11 @@
 # Ecosystem Research
 
+> **Role of this document:** reference and inspiration ONLY. This is **not** a
+> dependency list. Policy is built-in nvim features first; a third-party plugin
+> is added only if absolutely required and phase-justified (see `docs/PLAN.md`
+> "Dependency policy"). The plugins below are studied for implementation
+> details, not copied.
+
 Goal: identify which existing Neovim plugins and libraries already solve pieces
 of what we need (agent harness as backend, chat UI, streaming into a buffer,
 sessions, buffers, diffs, pickers/inputs) so we reuse rather than reinvent.

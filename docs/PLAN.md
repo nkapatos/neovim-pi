@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: **draft for approval — no code written yet.**
+Status: **draft for review (PR). No implementation code yet.**
 
 ## 1. Goal
 
@@ -18,22 +18,22 @@ nvim is a thin renderer + input surface + launcher.
 3. **CWD = project root**, resolved the way LSP tooling does (rooter/git-root),
    not nvim's global `getcwd()`.
 4. **Fresh start every time; no arg persistence.** The start UI is an argv
-   builder for `pi --mode rpc`, mirroring the CLI (`pi --no-session`, tool
-   flags, trust flags, `--name`, `--provider/--model`, …). Resume/fork are
+   builder for `pi --mode rpc`, mirroring the CLI. Resume/fork are
    *post-attach commands* (`switch_session`/`fork`), not launch flags.
 5. **On Pi exit: show end-state, nothing more** (TUI parity). No reconnect magic.
 6. **Pi extensions, not nvim, provide custom commands/UI.** The extension-UI
-   sub-protocol (`select`/`confirm`/`input`/`editor`/`notify`/`setStatus`) is
-   rendered generically by nvim.
+   sub-protocol is rendered generically by nvim.
 7. **Anti-corruption layer:** the only code that knows Pi's wire format is the
-   adapter; the UI speaks a stable unified vocabulary. This absorbs Pi RPC
-   churn and enables future harnesses/ACP.
+   adapter; the UI speaks a stable unified vocabulary.
+8. **Built-in nvim first** (see §4). Minimum nvim **0.12.5**. Prefer the
+   experimental **`ui2`** for messages/cmdline (see §5).
+9. **Workflow:** no pushes to `main`; every change on a branch + PR.
 
 ## 3. Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│ nvim UI (buffers, pickers, input, diff)      │  ← speaks unified vocabulary
+│ nvim UI (buffers, native pickers/input/diff) │  ← speaks unified vocabulary
 ├─────────────────────────────────────────────┤
 │ adapter (anti-corruption layer)              │  ← only code that knows Pi RPC
 ├─────────────────────────────────────────────┤
@@ -49,11 +49,71 @@ Unified vocabulary (nvim-facing, Pi-agnostic):
   `tool_update`, `tool_end`, `message_end`, `turn_end`, `settled`, `state`,
   `ui_request`, `status`, `exit`.
 
-(Full Pi RPC surface is summarized in §8; the adapter maps it to the above.)
+(Full Pi RPC surface is summarized in §10; the adapter maps it to the above.)
 
-## 4. Phases
+## 4. Dependency policy: built-ins first
 
-### Phase 0 — Transport + adapter (foundation)
+Layer 0 — **required, built-in nvim 0.12.5 only:**
+
+- `jobstart` / `chansend` / `jobstop` (Pi child process + JSONL framing)
+- `vim.ui.select` / `vim.ui.input` / `vim.notify` (built-in indirection points;
+  users may remap these themselves — we do not hard-depend on any picker)
+- floating windows (`nvim_open_win`) + `buf`/`win` APIs (chat buffer, diffs)
+- `ui2` (messages/cmdline/dialog/pager) and optionally `vim.ui_attach`
+- `vim.json`, `vim.schedule`, `:checkhealth`, native `pack/`
+
+Layer 1 — **third-party, only if absolutely required.** Each addition must be
+phase-justified in a PR. `docs/RESEARCH.md` is the reference for *how* other
+plugins solved a problem, not a shopping list. Candidates (to justify, never
+assume): `plenary.nvim` (tests only, dev dependency), and only later possibly a
+picker/input/markdown-rendering plugin if the built-ins prove genuinely
+insufficient.
+
+Rationale: this plugin is a TUI over a harness, not a general AI plugin. Its
+unique work is the adapter; the UI surface should stay as close to nvim-native
+as possible so it is predictable and easy to audit.
+
+## 5. `ui2` (experimental messages/cmdline) — what it is and how we use it
+
+Neovim 0.12.x ships an experimental redesign of the core messages + commandline
+presentation layer, enabled with:
+
+```lua
+require('vim._core.ui2').enable()  -- experimental; guard with pcall
+```
+
+What it gives us (from `:help ui2`, `:help news`):
+
+- Replaces the legacy message grid; **no "Press ENTER" interruptions**; no
+  `W10` warning delays.
+- Four special windows/buffers with `filetype` set to their id: `cmd`, `msg`,
+  `pager`, `dialog` (configure via `FileType` autocmd).
+- Cmdline highlighted as you type; **`cmdheight=0` works better** with ui2.
+- Messages overflow into a "spill" indicator; `g<` opens the pager.
+
+How we use it:
+
+- Enable `ui2` at plugin load (guarded). It is our messages/cmdline/dialog
+  layer — we do **not** depend on third-party message UIs.
+- Route status/errors through `vim.notify` (lands in the ui2 messages area).
+- Modal confirmations (`extension_ui_request` → `confirm`/`select`) use the
+  native dialog surface / `vim.ui.select`, not a custom float, unless the UX
+  genuinely requires it.
+- Prompt input uses the cmdline (ui2-enhanced) or a dedicated input buffer;
+  decide in Iteration 2 based on multi-line needs.
+
+Related, also experimental: `vim.ui_attach(ns, opts, cb)` subscribes to UI
+events in-process (popupmenu/messages) for custom screen elements. Not needed
+for Iterations 0–3; revisit only if we implement custom rendering.
+
+## 6. Iterations
+
+### Iteration 0 — package skeleton (vim.pack installable)
+See [START.md](START.md). Standard `plugin/` + `lua/` + `doc/` layout, version
+guard (≥0.12.5), ui2 enable (guarded), `:checkhealth neovim-pi`, placeholder
+`:Pi`, and a `justfile`. **No agent logic yet.**
+
+### Iteration 1 — transport + adapter (foundation)
 - Adapter spawns `pi --mode rpc` (minimal hardcoded argv), strict JSONL framing
   (split on LF only, strip CR — do **not** use nvim line-buffered job output,
   because Pi forbids treating U+2028/U+2029 as separators).
@@ -62,72 +122,88 @@ Unified vocabulary (nvim-facing, Pi-agnostic):
 - **Milestone:** attach to Pi, stream raw text into a buffer, Esc→abort,
   clean shutdown.
 
-### Phase 1 — Usable fresh-session TUI
+### Iteration 2 — usable fresh-session TUI
 - Real input buffer (a nvim buffer as the editor), not `vim.fn.input`.
-- Render text/thinking/tool-call blocks; statusline from `get_state`
-  (model, streaming state, session name).
-- Model picker: `get_available_models` → picker (snacks/telescope) → `set_model`.
+- Render text/thinking/tool-call blocks; statusline from `get_state`.
+- Model picker: `get_available_models` → `vim.ui.select` → `set_model`.
 - **Milestone:** complete a coding task in nvim against a fresh Pi session.
 
-### Phase 2 — CLI-parity launch
+### Iteration 3 — CLI-parity launch
 - LSP-style rooter for spawn cwd.
 - Start dialog = argv builder over Pi's flags (session/tool/trust/model).
 - Surface effective project-trust state (RPC mode applies `defaultProjectTrust`
   silently; `-a`/`-na` override per run).
 - **Milestone:** starting via nvim ≡ typing the equivalent `pi …` command.
 
-### Phase 3 — Resume + extension UI
-- `switch_session`/`fork` by explicit path (no session *picker* yet — see §7).
-- Render extension-UI sub-protocol: `select`/`confirm` → picker/`vim.ui.input`,
+### Iteration 4 — resume + extension UI
+- `switch_session`/`fork` by explicit path (no session *picker* yet — see §9).
+- Render extension-UI sub-protocol: `select`/`confirm` → `vim.ui.select`/input,
   `editor` → floating buffer, `notify`/`setStatus`/`setWidget`/`setTitle` →
-  notify/statusline/winbar.
+  `vim.notify`/statusline/winbar.
 - **Milestone:** a Pi extension with an interactive prompt works end-to-end.
 
-### Phase 4 — Fidelity + Pi-side capability
-- Thinking collapse, markdown/code highlighting (render-markdown), diff gutter
-  on tool writes, session tree (`get_tree`), stats footer, steering queue.
-- Session **listing** (see §7): decide Pi plugin vs. small fork; expose as an
+### Iteration 5 — fidelity + Pi-side capability
+- Thinking collapse, markdown/code highlighting, diff gutter on tool writes,
+  session tree (`get_tree`), stats footer, steering queue.
+- Session **listing** (see §9): decide Pi plugin vs. small fork; expose as an
   adapter `list_sessions` op that degrades gracefully until Pi supports it.
 - Adapter hardening: pin Pi RPC surface, tests against `pi --mode rpc`.
 
-## 5. Dependency choices (from research)
-
-- Picker/input/notify: **snacks.nvim** (or telescope + dressing if user prefers).
-- Terminal fallback (run `pi` TUI in a term): **toggleterm.nvim**.
-- Markdown rendering (Phase 4): **render-markdown.nvim** (optional).
-- Tests: **plenary.nvim**.
-
-## 6. Testing strategy
+## 7. Testing strategy
 
 - **Unit:** adapter framing (`_on_stdout` with crafted chunks incl. CRLF and
   U+2028/U+2029), wire→unified translation, request/response correlation.
-  No real process needed (feed bytes directly, assert emitted events).
+  No real process needed.
 - **Integration:** spawn `pi --mode rpc --no-session`; exercise non-LLM commands
   (`get_state`, `get_available_models`, `new_session`, `abort`) and assert
   `response` handling. Skip gracefully if `pi` is absent.
 - **Smoke:** headless nvim boots the plugin against `pi --mode rpc` for N
-  seconds (guards against regressions in the startup path).
-- Task management via `justfile` (user preference — see HANDOFF).
+  seconds.
+- Test dependency (`plenary.nvim`) is a **dev-only** dependency, not a runtime
+  dependency; document it in `justfile` + `just setup-test`.
+- Task management via `justfile` (user preference).
 
-## 7. Known gaps / risks
+## 8. Package layout (target)
+
+```
+neovim-pi/
+├── plugin/neovim-pi.lua        # load guard, :Pi etc.
+├── lua/pi/
+│   ├── init.lua                # setup, version guard, ui2 enable
+│   ├── adapter.lua             # anti-corruption layer (Pi RPC)
+│   ├── protocol.lua            # unified vocabulary
+│   ├── ui/…                    # buffers, input, diff (later)
+│   └── health.lua              # :checkhealth
+├── doc/neovim-pi.txt + doc/tags
+├── tests/                      # plenary specs (dev)
+├── justfile
+└── README.md, docs/
+```
+
+Install: `~/.local/share/nvim/site/pack/<pack>/start/neovim-pi` (auto) or
+`.../opt/neovim-pi` + `:packadd neovim-pi`.
+
+## 9. Known gaps / risks
 
 1. **Pi RPC has no session-listing command.** The TUI's `/resume` and
    `SessionManager.list()` exist, but are not exposed over RPC. Session
    *picker* therefore needs a Pi extension or a small fork (a `list_sessions`
-   RPC command). Deferred past Phase 3; `switch_session`-by-path unblocks
+   RPC command). Deferred past Iteration 4; `switch_session`-by-path unblocks
    resume earlier.
 2. **Project trust diverges in RPC mode.** No interactive trust prompt; default
    `ask` silently ignores project resources. Mitigate by exposing `-a`/`-na`
-   and showing effective trust state (Phase 2).
-3. **No built-in permission popups in Pi** (deliberate — usage.md). Tool
-   availability is config (`--tools`/`--exclude-tools`/…), not per-call prompts.
-   So there is no approval modal to build; only extension dialogs (Phase 3).
+   and showing effective trust state (Iteration 3).
+3. **No built-in permission popups in Pi** (deliberate). Tool availability is
+   config (`--tools`/`--exclude-tools`/…), not per-call prompts. Only extension
+   dialogs need rendering (Iteration 4).
 4. **Streaming render performance** — coalesce deltas; don't call
    `nvim_buf_set_lines` per delta.
 5. **Adapter drift** — pin/version the Pi RPC surface and keep a smoke test so
    Pi upgrades that change RPC fail loudly.
+6. **`ui2` and `vim.ui_attach` are experimental** — always guard with `pcall`
+   and feature-detect; degrade to legacy message/cmdline UI.
 
-## 8. Pi RPC surface reference (summary)
+## 10. Pi RPC surface reference (summary)
 
 `pi --mode rpc` = bidirectional JSONL over stdin/stdout. One JSON object per
 line; LF is the only record delimiter (strip optional trailing CR).
@@ -137,16 +213,16 @@ Key **commands** (nvim → Pi): `prompt` (+`streamingBehavior`), `steer`,
 `clone`, `get_entries` (+`since` cursor), `get_tree`, `get_messages`,
 `get_state`, `get_session_stats`, `get_commands`, `get_available_models`,
 `set_model`, `cycle_model`, `set_thinking_level`, `set_auto_compaction`,
-`set_auto_retry`, `bash`, `export_html`, `set_session_name`, and the
-extension-UI responses (`extension_ui_response`).
+`set_auto_retry`, `bash`, `export_html`, `set_session_name`, and
+`extension_ui_response`.
 
 Key **events** (Pi → nvim): `agent_start`/`agent_end`/`agent_settled`,
 `turn_start`/`turn_end`, `message_start`/`message_update`/`message_end`
 (`message_update` carries `text_delta`/`thinking_delta`/`toolcall_*`),
-`tool_execution_start`/`update`/`end`, `queue_update`,
-`compaction_start`/`end`, `auto_retry_*`, `extension_ui_request`,
-`extension_error`, `bash_execution_update`.
+`tool_execution_start`/`update`/`end`, `queue_update`, `compaction_start`/`end`,
+`auto_retry_*`, `extension_ui_request`, `extension_error`,
+`bash_execution_update`.
 
 Full reference: `docs/rpc.md` in the pi-coding-agent package (also `json.md` for
-the fire-and-forget `pi --mode json` event stream, and `sdk.md` for the
-in-process Node SDK — not needed for a Lua client).
+the fire-and-forget `pi --mode json` stream, and `sdk.md` for the in-process
+Node SDK — not needed for a Lua client).

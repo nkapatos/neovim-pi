@@ -4,69 +4,71 @@ For the next session/agent continuing this work.
 
 ## 1. Where things stand
 
-- **Research complete** — `docs/RESEARCH.md`.
-- **Plan drafted, not approved** — `docs/PLAN.md`. Treat as a proposal; the user
-  has not signed off on starting implementation.
-- **No implementation code exists in this repo** (deliberately removed). Any Lua
-  adapter scaffold from earlier in this session was exploratory and should not
-  be reused without re-reviewing against `docs/PLAN.md`.
+- **Research complete** — `docs/RESEARCH.md` (reference/inspiration only).
+- **Plan drafted** — `docs/PLAN.md` (draft, under PR review).
+- **Entry point for implementation** — `docs/START.md` (read this first; it
+  says exactly what Iteration 0 is).
+- **No implementation code exists** (deliberately). Any adapter scaffold from
+  earlier exploratory discussion was removed and must not be reused without
+  re-reviewing against `docs/PLAN.md`.
 
-## 2. Environment (this container, ephemeral)
+## 2. Git workflow (hard rule)
 
-Nothing here persists to the host — the container has **no mapped volume**.
-A fresh container must redo setup:
+- **Never push to `main`** unless the user explicitly asks.
+- Every change: create a branch, push the branch, open a PR for review.
+- This session created branch `plan/out-of-box-ui2-pack` and opened a PR for the
+  planning docs. Implementation branches should be named like
+  `iter/0-pack-skeleton`, `iter/1-adapter`, etc.
+
+## 3. Environment (ephemeral — redo in a fresh container)
+
+The container has **no mapped volume to host**; nothing here persists. Redo:
 
 ```bash
-# neovim (mise is preinstalled; apt has no neovim candidate here)
+# neovim (mise preinstalled; apt has no neovim candidate here)
 mise use -g neovim@0.12.5
 
-# test dependency
+# dev-only test dependency
 git clone --depth 1 https://github.com/nvim-lua/plenary.nvim .deps/plenary.nvim
 ```
 
-`pi` itself is already on PATH in these containers (mise-installed).
-Note: the container clock is set to 2026; do not treat dates as authoritative.
+`pi` is already on PATH in these containers (mise-installed). The container
+clock is set to 2026; do not treat dates as authoritative.
 
-## 3. GitHub repo
+## 4. GitHub repo
 
-- Remote: `https://github.com/nkapatos/neovim-pi` (public, currently docs-only).
-- `gh` is installed and authenticated as `nkapatos` in this container, but that
-  auth is **ephemeral** — a fresh container needs the operator to re-authenticate.
+- Remote: `https://github.com/nkapatos/neovim-pi` (public).
+- `gh` is installed and authenticated as `nkapatos` **in this container only**;
+  auth is ephemeral. A fresh container needs the operator to re-authenticate.
   **Never** initiate a browser/device-code OAuth flow yourself.
 - Push flow once authenticated:
 
 ```bash
-gh auth setup-git                                   # make git use gh's token
+gh auth setup-git
 git config user.name  "nkapatos"
 git config user.email "1628148+nkapatos@users.noreply.github.com"
-git remote add origin https://github.com/nkapatos/neovim-pi.git
-git add -A && git commit -m "docs: research and implementation plan"
-git push -u origin main
+git checkout -b <branch>
+git add -A && git commit -m "..."
+git push -u origin <branch>
+gh pr create --base main --head <branch> --title "..." --body "..."
 ```
 
-## 4. Constraints to respect
+## 5. Constraints
 
-- Keep notes/context under `/home/agent/docs`; do **not** create `AGENTS.md` or
-  TODO files in the repo. Repo gets source + docs only.
+- Keep notes under `/home/agent/docs`; do **not** create `AGENTS.md`/TODO files
+  in the repo.
 - Never write credentials/secrets into the repo.
-- `/home/agent` (including `~/.pi/agent`) is ephemeral; do not copy it into the
-  repo or rely on it surviving.
-- Precedent ledger is live (MCP at `http://192.168.64.19:8080/mcp`; the pi
-  extension's default was hardcoded to that in this container because
-  `PRECEDENT_MCP_URL` was not set in the pi process env).
-
-## 5. Standing precedent (apply during implementation)
-
-- **Use a `justfile` for task management** (user preference, preferred): build/
-  test/vet/format/run/verify should live in a repo `justfile`, and CI/docs
-  invoke `just` directly. Add it when implementation starts (not yet).
+- `/home/agent` (incl. `~/.pi/agent`) is ephemeral; do not copy it into the repo.
+- Precedent ledger MCP: `http://192.168.64.19:8080/mcp`. In this container the
+  pi extension's default URL was hardcoded to that (because `PRECEDENT_MCP_URL`
+  was unset in the pi process env). Re-check in a fresh container.
+- Standing precedent (apply during implementation): **use a `justfile` for task
+  management** (build/test/vet/format/run/verify).
 
 ## 6. Next actions (ordered)
 
-1. User approves/reviews `docs/PLAN.md` (esp. the dependency choice and the
-   session-listing gap in §7).
-2. On approval, start **Phase 0**: adapter + transport + minimal buffer
-   rendering, with plenary unit tests for framing/translation and an
-   integration test against `pi --mode rpc --no-session`.
-3. Add the `justfile` (task management) alongside the first code.
-4. Phase 1: real input buffer + model picker + statusline.
+1. Review the open PR for `docs/` (planning updates).
+2. On approval, start **Iteration 0** per `docs/START.md` on a new branch
+   `iter/0-pack-skeleton`, open a PR.
+3. Then Iteration 1 (adapter/transport) with plenary unit + integration tests,
+   plus the `justfile` tasks.
