@@ -22,6 +22,8 @@ local state = {
   spec = nil,
   cwd = nil,
   cmd = nil,
+  ext_status = {},
+  widgets = {},
 }
 
 local function ensure_cleanup_autocmd()
@@ -39,11 +41,64 @@ end
 
 local function render_statusline()
   if state.chat_win and vim.api.nvim_win_is_valid(state.chat_win) then
-    vim.wo[state.chat_win].statusline = " " .. M.statusline() .. " "
+    local extra = {}
+    for _, text in pairs(state.ext_status or {}) do
+      if text and text ~= "" then
+        extra[#extra + 1] = text
+      end
+    end
+    local suffix = #extra > 0 and ("  ·  " .. table.concat(extra, " · ")) or ""
+    vim.wo[state.chat_win].statusline = " " .. M.statusline() .. suffix .. " "
   end
   if state.input_win and vim.api.nvim_win_is_valid(state.input_win) then
+    local widget = {}
+    for _, lines in pairs(state.widgets or {}) do
+      for _, line in ipairs(lines or {}) do
+        widget[#widget + 1] = line
+      end
+    end
+    vim.wo[state.input_win].winbar = #widget > 0 and (" " .. table.concat(widget, "  ·  ") .. " ")
+      or ""
     vim.wo[state.input_win].statusline = " pi input   <C-s> send · <Esc><CR> send · <C-c> normal "
   end
+end
+
+--- Route one `extension_ui_request` to the extension-UI renderer.
+---
+--- @param request table
+local function handle_ui_request(request)
+  require("pi.ui.extension").handle(request, {
+    respond = function(response)
+      if state.adapter then
+        state.adapter:send(protocol.command(protocol.OP.RESPOND_UI, response))
+      end
+    end,
+    notify = function(message, level)
+      vim.notify(message, level)
+    end,
+    set_status = function(key, text)
+      state.ext_status[key] = text
+      render_statusline()
+    end,
+    set_widget = function(key, lines)
+      state.widgets[key] = lines
+      render_statusline()
+    end,
+    set_title = function(title)
+      pcall(vim.fn.settitle, title)
+    end,
+    set_editor_text = function(text)
+      if not state.input then
+        return
+      end
+      local buf = state.input:ensure_buffer()
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text or "", "\n", { plain = true }))
+      if state.input_win and vim.api.nvim_win_is_valid(state.input_win) then
+        vim.api.nvim_set_current_win(state.input_win)
+        vim.cmd("startinsert!")
+      end
+    end,
+  })
 end
 
 --- Build the split layout if it is missing: chat on top, input below.
@@ -93,6 +148,8 @@ function M.start(opts)
   state.exit_code = nil
   state.streaming = false
   state.info = nil
+  state.ext_status = {}
+  state.widgets = {}
 
   state.spec = opts.launch or { session = "new" }
   state.cwd = opts.cwd or launch.root(opts.buf or 0, opts.root_markers)
@@ -223,6 +280,91 @@ function M.refresh_state(callback)
   end)
 end
 
+--- Replace the transcript from Pi's message history (resume/fork/new).
+---
+--- @param callback fun(data: table|nil, err: string|nil)?
+function M.refresh_transcript(callback)
+  if not M.is_active() then
+    return
+  end
+  state.adapter:request(protocol.command(protocol.OP.GET_MESSAGES), function(data, err)
+    if err then
+      vim.notify("pi: get_messages failed: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    state.chat:render_messages((data and data.messages) or {})
+    if callback then
+      callback(data, err)
+    end
+  end)
+end
+
+--- Start a fresh session (same process) and reload the transcript.
+function M.new_session()
+  if not M.is_active() then
+    return
+  end
+  state.adapter:request(protocol.command(protocol.OP.NEW_SESSION), function(_, err)
+    if err then
+      vim.notify("pi: new_session failed: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    M.refresh_transcript()
+    M.refresh_state()
+  end)
+end
+
+--- Resume a session by explicit path, then reload the transcript.
+---
+--- @param path string
+function M.resume(path)
+  if not M.is_active() then
+    vim.notify("pi: not running", vim.log.levels.WARN)
+    return
+  end
+  state.adapter:request(
+    protocol.command(protocol.OP.SWITCH_SESSION, { session_path = path }),
+    function(data, err)
+      if err then
+        vim.notify("pi: switch_session failed: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      if data and data.cancelled then
+        vim.notify("pi: switch cancelled by extension", vim.log.levels.WARN)
+        return
+      end
+      M.refresh_transcript()
+      M.refresh_state()
+      vim.notify("pi: resumed " .. path, vim.log.levels.INFO)
+    end
+  )
+end
+
+--- Fork at an explicit entry id, then reload the transcript.
+---
+--- @param entry_id string
+function M.fork(entry_id)
+  if not M.is_active() then
+    vim.notify("pi: not running", vim.log.levels.WARN)
+    return
+  end
+  state.adapter:request(
+    protocol.command(protocol.OP.FORK, { entry_id = entry_id }),
+    function(data, err)
+      if err then
+        vim.notify("pi: fork failed: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      if data and data.cancelled then
+        vim.notify("pi: fork cancelled by extension", vim.log.levels.WARN)
+        return
+      end
+      M.refresh_transcript()
+      M.refresh_state()
+    end
+  )
+end
+
 --- Pick a model with `vim.ui.select` and switch to it.
 function M.select_model()
   if not M.is_active() then
@@ -313,6 +455,9 @@ function M._on_event(event)
   end
   if event.type == protocol.EVENT.EXIT then
     state.exit_code = event.code
+  end
+  if event.type == protocol.EVENT.UI_REQUEST then
+    handle_ui_request(event.request)
   end
   if state.chat then
     state.chat:on_event(event)

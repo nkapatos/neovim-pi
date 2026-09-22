@@ -1,6 +1,20 @@
 local adapter_mod = require("pi.adapter")
 local protocol = require("pi.protocol")
 
+--- Locate Pi's bundled rpc-demo example extension (version-agnostic).
+---
+--- @return string|nil
+local function find_rpc_demo()
+  local exe = vim.fn.exepath("pi")
+  if exe == "" then
+    return nil
+  end
+  local node_modules = vim.fn.fnamemodify(vim.fn.fnamemodify(exe, ":p:h"), ":h")
+  local pattern = node_modules
+    .. "/.mise/*/node_modules/@earendil-works/pi-coding-agent/examples/extensions/rpc-demo.ts"
+  return vim.fn.glob(pattern, false, true)[1]
+end
+
 --- Integration coverage against a real `pi --mode rpc` process. Skipped when
 --- `pi` is not on PATH.
 describe("pi.adapter integration", function()
@@ -42,6 +56,17 @@ describe("pi.adapter integration", function()
     end, 50)
     assert.is_truthy(new_session, "no new_session response from pi")
     assert.is_nil(new_session.err)
+
+    local messages
+    a:request(protocol.command("get_messages"), function(data, e)
+      messages = { data = data, err = e }
+    end)
+    vim.wait(30000, function()
+      return messages ~= nil
+    end, 50)
+    assert.is_truthy(messages, "no get_messages response from pi")
+    assert.is_nil(messages.err)
+    assert.is_true(type(messages.data.messages) == "table")
 
     local models
     a:request(protocol.command("get_available_models"), function(data, e)
@@ -121,5 +146,60 @@ describe("pi.adapter integration", function()
       return not session.is_active()
     end, 50)
     assert.is_false(session.is_active())
+  end)
+
+  it("answers an extension dialog end-to-end (rpc-demo)", function()
+    local rpc_demo = find_rpc_demo()
+    if not rpc_demo then
+      pending("rpc-demo example extension not found")
+      return
+    end
+
+    local events = {}
+    local a = adapter_mod.new({
+      cmd = { "pi", "--mode", "rpc", "--no-session", "-e", rpc_demo },
+      cwd = vim.fn.getcwd(),
+      on_event = function(event)
+        events[#events + 1] = event
+      end,
+    })
+    assert.is_true(a:start())
+
+    local function find_ui(method)
+      for _, event in ipairs(events) do
+        if event.type == protocol.EVENT.UI_REQUEST and event.request.method == method then
+          return event.request
+        end
+      end
+      return nil
+    end
+
+    -- session_start emits fire-and-forget setTitle/setWidget.
+    vim.wait(30000, function()
+      return find_ui("setWidget") ~= nil or find_ui("setTitle") ~= nil
+    end, 50)
+    assert.is_truthy(find_ui("setWidget") or find_ui("setTitle"), "no session_start UI request")
+
+    -- The /rpc-input command opens an input dialog.
+    a:request(protocol.command("prompt", { message = "/rpc-input" }), function() end)
+    vim.wait(30000, function()
+      return find_ui("input") ~= nil
+    end, 50)
+    local dialog = find_ui("input")
+    assert.is_truthy(dialog, "no input dialog request")
+
+    -- Answer it; the extension then notifies with the entered value.
+    a:send(protocol.command("ui_response", { id = dialog.id, value = "hello" }))
+    vim.wait(30000, function()
+      local notify = find_ui("notify")
+      return notify ~= nil and (notify.message or ""):find("hello", 1, true) ~= nil
+    end, 50)
+    assert.is_truthy(find_ui("notify"), "no notify after answering the input dialog")
+
+    a:stop()
+    vim.wait(15000, function()
+      return not a:is_running()
+    end, 50)
+    assert.is_false(a:is_running())
   end)
 end)

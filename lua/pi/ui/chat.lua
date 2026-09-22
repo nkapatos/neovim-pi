@@ -45,6 +45,26 @@ local function append_text(buf, text)
   end
 end
 
+--- Extract plain text from a message content field (string or block array).
+---
+--- @param content string|table|nil
+--- @return string
+local function text_of(content)
+  if type(content) == "string" then
+    return content
+  end
+  if type(content) == "table" then
+    local parts = {}
+    for _, block in ipairs(content) do
+      if block.type == "text" then
+        parts[#parts + 1] = block.text or ""
+      end
+    end
+    return table.concat(parts, "\n")
+  end
+  return ""
+end
+
 --- Apply a highlight extmark over a buffer range.
 ---
 --- @param buf integer
@@ -229,6 +249,55 @@ function Chat:_scroll_to_end()
       local last = vim.api.nvim_buf_line_count(self.buf)
       pcall(vim.api.nvim_win_set_cursor, win, { last, 0 })
     end
+  end
+end
+
+--- Clear the transcript buffer.
+function Chat:clear()
+  self._pending = ""
+  self._pending_hl = nil
+  local buf = self:ensure_buffer()
+  vim.api.nvim_buf_clear_namespace(buf, M.ns, 0, -1)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
+  self:_scroll_to_end()
+end
+
+--- Replace the transcript with a full message history (used by resume/fork).
+---
+--- @param messages table[]
+function Chat:render_messages(messages)
+  self:clear()
+  for _, message in ipairs(messages or {}) do
+    self:_render_message(message)
+  end
+  self:_flush()
+  self:_scroll_to_end()
+end
+
+--- @param message table
+function Chat:_render_message(message)
+  local role = message.role
+  if role == "user" then
+    self:message(text_of(message.content))
+  elseif role == "assistant" then
+    for _, block in ipairs(message.content or {}) do
+      if block.type == "text" then
+        self:_push(block.text or "", "PiText")
+      elseif block.type == "thinking" then
+        self:_push(block.thinking or "", "PiThinking")
+      elseif block.type == "toolCall" then
+        self:_push(("\n▸ %s\n"):format(block.name or "tool"), "PiTool")
+      end
+    end
+    self:_ensure_newline()
+  elseif role == "toolResult" then
+    local mark = message.isError and "✗" or "✓"
+    self:_push(
+      ("  %s %s\n"):format(mark, message.toolName or "tool"),
+      message.isError and "PiToolError" or "PiToolOk"
+    )
+  elseif role == "bashExecution" then
+    self:_push(("$ %s\n%s\n"):format(message.command or "", message.output or ""), "PiTool")
   end
 end
 

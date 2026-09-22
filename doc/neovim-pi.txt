@@ -70,6 +70,16 @@ and restart Neovim: >lua
 	Pick a model with `vim.ui.select` (built from `get_available_models`)
 	and switch the running session to it.
 
+:PiNew						*:PiNew*
+	Start a fresh session in the running process and clear the transcript.
+
+:PiResume {path}					*:PiResume*
+	Resume a session by explicit path (`switch_session`) and reload the
+	transcript. Session listing is planned for a later iteration.
+
+:PiFork {entryId}				*:PiFork*
+	Fork at an explicit session entry id and reload the transcript.
+
 :PiCmd						*:PiCmd*
 	Show the exact `pi …` command, cwd, and effective trust that `:Pi` would
 	use (or that the running session used).
@@ -120,6 +130,21 @@ In RPC mode Pi never prompts for project trust; without `--approve`/`-a` or
 `--no-approve`/`-na` it silently applies the global `defaultProjectTrust`
 setting. `:PiTrust` reports which applies and whether the project has
 project-local resources (`.pi/`, `.agents/skills`) that the decision affects.
+
+==============================================================================
+4c. EXTENSION UI				*neovim-pi-extension-ui*
+
+Pi extensions can request user interaction over RPC. Neovim renders them
+generically:
+
+- `select`, `confirm`, `input` use `vim.ui.select` / `vim.ui.input`.
+- `editor` opens a floating multi-line buffer (`<C-s>` submits, `<Esc>` cancels).
+- `notify` maps to |vim.notify|; `setStatus` appears in the session statusline;
+  `setWidget` appears in the input window's winbar; `setTitle` sets the terminal
+  title; `set_editor_text` prefills the input buffer.
+
+Dialog responses are sent back as `extension_ui_response`. Timeouts are handled
+by Pi; the client does not track them.
 
 ==============================================================================
 5. HEALTH					*neovim-pi-health*

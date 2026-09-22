@@ -30,6 +30,9 @@ M.OP = {
   GET_AVAILABLE_MODELS = "get_available_models",
   SET_MODEL = "set_model",
   SWITCH_SESSION = "switch_session",
+  FORK = "fork",
+  CLONE = "clone",
+  RESPOND_UI = "ui_response",
   STOP = "stop",
 }
 
@@ -61,6 +64,20 @@ function M.command(op, args)
     return { type = "set_model", provider = args.provider, modelId = args.model_id }
   elseif op == M.OP.SWITCH_SESSION then
     return { type = "switch_session", sessionPath = args.session_path }
+  elseif op == M.OP.FORK then
+    return { type = "fork", entryId = args.entry_id }
+  elseif op == M.OP.CLONE then
+    return { type = "clone" }
+  elseif op == M.OP.RESPOND_UI then
+    local cmd = { type = "extension_ui_response", id = args.id }
+    if args.cancelled then
+      cmd.cancelled = true
+    elseif args.confirmed ~= nil then
+      cmd.confirmed = args.confirmed
+    elseif args.value ~= nil then
+      cmd.value = args.value
+    end
+    return cmd
   end
   return nil, ("unknown operation: %s"):format(tostring(op))
 end

@@ -72,4 +72,29 @@ describe("pi.ui.chat buffer streaming", function()
     local marks = vim.api.nvim_buf_get_extmarks(c.buf, require("pi.ui.chat").ns, 0, -1, {})
     assert.is_true(#marks > 0)
   end)
+
+  it("renders a resumed transcript from messages", function()
+    local c = chat.new()
+    c:render_messages({
+      { role = "user", content = "hi" },
+      {
+        role = "assistant",
+        content = {
+          { type = "thinking", thinking = "hmm" },
+          { type = "text", text = "hello" },
+          { type = "toolCall", id = "t1", name = "bash" },
+        },
+      },
+      { role = "toolResult", toolName = "bash", isError = false, content = {} },
+      { role = "bashExecution", command = "ls", output = "a" },
+    })
+
+    local text = table.concat(vim.api.nvim_buf_get_lines(c.buf, 0, -1, false), "\n")
+    assert.matches("› hi", text)
+    assert.matches("hmm", text)
+    assert.matches("hello", text)
+    assert.matches("▸ bash", text)
+    assert.matches("✓ bash", text)
+    assert.matches("%$ ls", text)
+  end)
 end)

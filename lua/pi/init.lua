@@ -210,6 +210,29 @@ function M.session_launch_info()
   return session.cwd(), session.command(), session.trust()
 end
 
+--- Start a fresh session in the running process and reload the transcript.
+function M.new_session()
+  return require("pi.session").new_session()
+end
+
+--- Resume a session by explicit path and reload the transcript.
+--- @param path string
+function M.resume(path)
+  return require("pi.session").resume(path)
+end
+
+--- Fork at an explicit entry id and reload the transcript.
+--- @param entry_id string
+function M.fork(entry_id)
+  return require("pi.session").fork(entry_id)
+end
+
+--- Reload the transcript from Pi's message history.
+--- @param callback fun(data: table|nil, err: string|nil)?
+function M.refresh_transcript(callback)
+  return require("pi.session").refresh_transcript(callback)
+end
+
 --- Sequential `vim.ui` questionnaire helper.
 local function ask(spec, questions, index, done)
   if index > #questions then
