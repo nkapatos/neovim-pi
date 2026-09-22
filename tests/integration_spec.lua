@@ -43,6 +43,31 @@ describe("pi.adapter integration", function()
     assert.is_truthy(new_session, "no new_session response from pi")
     assert.is_nil(new_session.err)
 
+    local models
+    a:request(protocol.command("get_available_models"), function(data, e)
+      models = { data = data, err = e }
+    end)
+    vim.wait(30000, function()
+      return models ~= nil
+    end, 50)
+    assert.is_truthy(models, "no get_available_models response from pi")
+    assert.is_nil(models.err)
+    assert.is_true(#models.data.models > 0)
+
+    local first = models.data.models[1]
+    local set_model
+    a:request(
+      protocol.command("set_model", { provider = first.provider, model_id = first.id }),
+      function(data, e)
+        set_model = { data = data, err = e }
+      end
+    )
+    vim.wait(30000, function()
+      return set_model ~= nil
+    end, 50)
+    assert.is_truthy(set_model, "no set_model response from pi")
+    assert.is_nil(set_model.err)
+
     a:stop()
     vim.wait(15000, function()
       return not a:is_running()

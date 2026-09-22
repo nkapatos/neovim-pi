@@ -3,7 +3,7 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: early implementation — Iteration 1 (transport + adapter).**
+**Status: early implementation — Iteration 2 (usable TUI).**
 
 ## The one-line architecture
 
@@ -47,13 +47,16 @@ vim.pack.add({ 'https://github.com/nkapatos/neovim-pi' })
 Run `:checkhealth neovim-pi` to verify the environment, and `:Pi` to confirm
 the plugin loaded.
 
-## Usage (Iteration 1)
+## Usage
 
-`:Pi` opens the chat scratch buffer and starts `pi --mode rpc` in the current
-project directory if it is not already running. `:PiSend {text}` sends a prompt,
-`:PiAbort` (or `<Esc>` in the chat buffer) aborts the current operation, and
-`:PiStop` shuts the Pi process down. Pi owns all session state; Neovim only
-renders what it reports.
+`:Pi` opens the chat + input layout and starts `pi --mode rpc` in the current
+project directory if it is not already running. Compose a prompt in the input
+buffer and send with `<C-s>` (insert) or `<CR>` (normal mode); `<CR>` in insert
+inserts a newline. `:PiSend {text}` sends directly, `:PiAbort` (or `<Esc>` in the
+chat buffer) aborts, `:PiModel` switches models, and `:PiStop` shuts Pi down.
+The assistant transcript renders text, thinking, and tool calls distinctly, and
+the statusline shows the model, thinking level, and streaming state. Pi owns all
+session state; Neovim only renders what it reports.
 
 ## Development
 

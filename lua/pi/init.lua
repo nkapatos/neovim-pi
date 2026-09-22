@@ -139,7 +139,24 @@ end
 --- Status of the current session.
 --- @return string
 function M.session_status()
-  return require("pi.session").status()
+  return require("pi.session").statusline()
+end
+
+--- Pick a model via `vim.ui.select` and switch the running session to it.
+function M.select_model()
+  return require("pi.session").select_model()
+end
+
+--- Refresh cached session state (model, thinking level, ...).
+--- @param callback fun(data: table|nil, err: string|nil)?
+function M.refresh_state(callback)
+  return require("pi.session").refresh_state(callback)
+end
+
+--- One-line session status (for statuslines).
+--- @return string
+function M.statusline()
+  return require("pi.session").statusline()
 end
 
 return M

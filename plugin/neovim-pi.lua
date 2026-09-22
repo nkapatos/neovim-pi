@@ -45,6 +45,10 @@ vim.api.nvim_create_user_command("PiAbort", function()
   require("pi").abort()
 end, { desc = "pi: abort the current operation" })
 
+vim.api.nvim_create_user_command("PiModel", function()
+  require("pi").select_model()
+end, { desc = "pi: pick a model" })
+
 vim.api.nvim_create_user_command("PiStop", function()
   require("pi").stop()
 end, { desc = "pi: stop the Pi process" })
