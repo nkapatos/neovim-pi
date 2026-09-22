@@ -49,6 +49,18 @@ vim.api.nvim_create_user_command("PiModel", function()
   require("pi").select_model()
 end, { desc = "pi: pick a model" })
 
+vim.api.nvim_create_user_command("PiNew", function()
+  require("pi").new_session()
+end, { desc = "pi: start a fresh session" })
+
+vim.api.nvim_create_user_command("PiResume", function(args)
+  require("pi").resume(args.args)
+end, { nargs = 1, desc = "pi: resume a session by path" })
+
+vim.api.nvim_create_user_command("PiFork", function(args)
+  require("pi").fork(args.args)
+end, { nargs = 1, desc = "pi: fork at an entry id" })
+
 vim.api.nvim_create_user_command("PiStart", function()
   require("pi").start_dialog()
 end, { desc = "pi: build a launch spec and start a session" })

@@ -28,6 +28,26 @@ describe("pi.protocol", function()
     }, protocol.command("switch_session", { session_path = "/tmp/s.jsonl" }))
   end)
 
+  it("builds fork/clone commands", function()
+    assert.same({ type = "fork", entryId = "e1" }, protocol.command("fork", { entry_id = "e1" }))
+    assert.same({ type = "clone" }, protocol.command("clone"))
+  end)
+
+  it("builds extension UI responses", function()
+    assert.same(
+      { type = "extension_ui_response", id = "1", value = "x" },
+      protocol.command("ui_response", { id = "1", value = "x" })
+    )
+    assert.same(
+      { type = "extension_ui_response", id = "1", confirmed = true },
+      protocol.command("ui_response", { id = "1", confirmed = true })
+    )
+    assert.same(
+      { type = "extension_ui_response", id = "1", cancelled = true },
+      protocol.command("ui_response", { id = "1", cancelled = true })
+    )
+  end)
+
   it("returns an error for unknown operations", function()
     local cmd, err = protocol.command("nope", {})
     assert.is_nil(cmd)

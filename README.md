@@ -3,7 +3,7 @@
 Neovim as the TUI for the [Pi](https://github.com/earendil-works/pi) coding-agent
 harness.
 
-**Status: early implementation — Iteration 3 (CLI-parity launch).**
+**Status: early implementation — Iteration 4 (resume + extension UI).**
 
 ## The one-line architecture
 
@@ -64,6 +64,10 @@ name) and shows the exact command before starting. `:PiCmd` prints the resolved
 decision. A project `.pi` directory wins root resolution (Pi reads project
 settings from `cwd/.pi`); otherwise generic markers (`.git`, `package.json`, …)
 are used, configurable via `setup({ launch = {...}, root_markers = {...} })`.
+`:PiNew`, `:PiResume {path}`, and `:PiFork {entryId}` operate on the running
+session and reload the transcript. Pi extension dialogs (`select`, `confirm`,
+`input`, `editor`) render through `vim.ui`/a floating buffer, and
+`notify`/`setStatus`/`setWidget`/`setTitle` surface in Neovim.
 
 ## Development
 
