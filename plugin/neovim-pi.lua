@@ -49,6 +49,45 @@ vim.api.nvim_create_user_command("PiModel", function()
   require("pi").select_model()
 end, { desc = "pi: pick a model" })
 
+vim.api.nvim_create_user_command("PiStart", function()
+  require("pi").start_dialog()
+end, { desc = "pi: build a launch spec and start a session" })
+
+vim.api.nvim_create_user_command("PiCmd", function()
+  local pi_mod = require("pi")
+  local cwd, command, trust = pi_mod.session_launch_info()
+  if not command then
+    local preview = pi_mod.describe_launch()
+    cwd, command, trust = preview.cwd, preview.command, preview.trust
+  end
+  vim.notify(
+    ("pi: cwd=%s\n%s\ntrust: %s (project-local resources: %s)"):format(
+      cwd,
+      command,
+      trust.description,
+      trust.project_resources and "present" or "none"
+    ),
+    vim.log.levels.INFO
+  )
+end, { desc = "pi: show the command nvim would run" })
+
+vim.api.nvim_create_user_command("PiTrust", function()
+  local pi_mod = require("pi")
+  local cwd, _, trust = pi_mod.session_launch_info()
+  if not trust then
+    local preview = pi_mod.describe_launch()
+    cwd, trust = preview.cwd, preview.trust
+  end
+  vim.notify(
+    ("pi trust @ %s: %s (project-local resources: %s)"):format(
+      cwd,
+      trust.description,
+      trust.project_resources and "present" or "none"
+    ),
+    vim.log.levels.INFO
+  )
+end, { desc = "pi: show effective project trust" })
+
 vim.api.nvim_create_user_command("PiStop", function()
   require("pi").stop()
 end, { desc = "pi: stop the Pi process" })

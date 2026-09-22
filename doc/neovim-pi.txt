@@ -55,6 +55,11 @@ and restart Neovim: >lua
 	`pi --mode rpc` in the current project directory if it is not already
 	running. One Neovim instance maps to one Pi process.
 
+:PiStart					*:PiStart*
+	Interactive launch builder: choose session mode, project trust, model,
+	tool allowlist, and session name; then show the exact command, cwd, and
+	trust, and start on confirmation.
+
 :PiSend {text}					*:PiSend*
 	Send a prompt to the running agent. Starts a session first if needed.
 
@@ -64,6 +69,13 @@ and restart Neovim: >lua
 :PiModel					*:PiModel*
 	Pick a model with `vim.ui.select` (built from `get_available_models`)
 	and switch the running session to it.
+
+:PiCmd						*:PiCmd*
+	Show the exact `pi …` command, cwd, and effective trust that `:Pi` would
+	use (or that the running session used).
+
+:PiTrust					*:PiTrust*
+	Show the effective project-trust decision for the project root.
 
 :PiStop						*:PiStop*
 	Stop the Pi process by closing its stdin (SIGTERM after a short grace
@@ -85,6 +97,29 @@ The input is a normal Neovim buffer (multi-line aware), not a one-line prompt:
 - `<C-c>` returns to normal mode. `<Esc>` in the chat window aborts.
 
 If your terminal swallows `<C-s>` (XOFF), use `<Esc>` then `<CR>` to send.
+
+==============================================================================
+4b. LAUNCH & PROJECT ROOT			*neovim-pi-launch*
+
+The spawn cwd is resolved LSP-style. A project `.pi` directory wins (Pi reads
+project settings from `cwd/.pi`, so the spawn cwd must own the nearest `.pi`);
+`$HOME/.pi` is ignored because that is Pi's global config, not a project marker.
+Otherwise the nearest ancestor of the current buffer (or the cwd) containing a
+generic marker (`.git`, `.hg`, `package.json`, `pyproject.toml`, `Cargo.toml`,
+`go.mod`, `Makefile`) is used. Override the generic markers with
+`require('pi').setup({ root_markers = { ... } })`.
+
+The launch spec mirrors Pi's flags and is configurable with
+`require('pi').setup({ launch = { ... } })`: `session` (`new`, `continue`,
+`resume`, `none`, or a session path), `provider`, `model`, `thinking`, `name`,
+`tools`, `exclude_tools`, `no_tools`, `no_builtin_tools`, `extensions`,
+`no_extensions`, `no_skills`, `no_context_files`, `approve` (`default`,
+`approve`, `no-approve`), `session_dir`, and `extra` (raw args).
+
+In RPC mode Pi never prompts for project trust; without `--approve`/`-a` or
+`--no-approve`/`-na` it silently applies the global `defaultProjectTrust`
+setting. `:PiTrust` reports which applies and whether the project has
+project-local resources (`.pi/`, `.agents/skills`) that the decision affects.
 
 ==============================================================================
 5. HEALTH					*neovim-pi-health*

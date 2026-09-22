@@ -99,4 +99,27 @@ describe("pi.adapter integration", function()
     end, 50)
     assert.is_false(session.is_active(), "session did not stop cleanly")
   end)
+
+  it("starts from a launch spec and exposes cwd/command", function()
+    local session = require("pi.session")
+    local state = session.start({
+      launch = { session = "none", model = "deepseek/deepseek-flash" },
+      cwd = vim.fn.getcwd(),
+    })
+    assert.is_true(state ~= nil)
+    assert.is_true(session.is_active())
+    assert.equal(vim.fn.getcwd(), session.cwd())
+
+    local command = session.command()
+    assert.is_truthy(command)
+    assert.matches("%-%-mode rpc", command)
+    assert.matches("%-%-no%-session", command)
+    assert.matches("deepseek/deepseek%-flash", command)
+
+    session.stop()
+    vim.wait(15000, function()
+      return not session.is_active()
+    end, 50)
+    assert.is_false(session.is_active())
+  end)
 end)

@@ -9,7 +9,15 @@ local M = {}
 M.MIN_NVIM = "0.12.5"
 
 --- Runtime configuration. Populated by `setup()`.
-M.config = {}
+M.config = {
+  --- Default launch spec for `:Pi` / `:PiStart` (see `pi.launch`).
+  launch = {
+    session = "new",
+    approve = "default",
+  },
+  --- Override the LSP-style project-root markers (defaults in `pi.launch`).
+  root_markers = nil,
+}
 
 --- Whether the experimental `ui2` module was successfully enabled.
 M.ui2_enabled = false
@@ -105,10 +113,35 @@ function M.status()
   )
 end
 
+--- Merge the configured launch spec with per-call overrides.
+--- @param launch_opts table|nil
+--- @return table
+local function resolve_launch(launch_opts)
+  return vim.tbl_deep_extend("force", {}, M.config.launch or {}, launch_opts or {})
+end
+
+--- Describe what `:Pi` would launch right now (no process started).
+--- @param opts table?
+--- @return table { spec, cwd, argv, command, trust }
+function M.describe_launch(opts)
+  opts = opts or {}
+  local launch = require("pi.launch")
+  local spec = resolve_launch(opts.launch)
+  local cwd = opts.cwd or launch.root(opts.buf or 0, M.config.root_markers)
+  return {
+    spec = spec,
+    cwd = cwd,
+    argv = launch.argv(spec),
+    command = launch.describe(spec),
+    trust = launch.trust(spec, cwd),
+  }
+end
+
 --- Open the chat session, starting Pi if needed.
 --- @param opts table?
 --- @return table
 function M.open(opts)
+  opts = vim.tbl_extend("force", opts or {}, { launch = resolve_launch((opts or {}).launch) })
   return require("pi.session").open(opts)
 end
 
@@ -117,7 +150,16 @@ end
 --- @return table state
 --- @return string|nil error
 function M.start(opts)
+  opts = vim.tbl_extend("force", opts or {}, { launch = resolve_launch((opts or {}).launch) })
   return require("pi.session").start(opts)
+end
+
+--- Stop any running session and start a fresh one with the given spec.
+--- @param opts table?
+--- @return table
+function M.restart(opts)
+  opts = vim.tbl_extend("force", opts or {}, { launch = resolve_launch((opts or {}).launch) })
+  return require("pi.session").restart(opts)
 end
 
 --- Send a prompt to the running agent.
@@ -157,6 +199,88 @@ end
 --- @return string
 function M.statusline()
   return require("pi.session").statusline()
+end
+
+--- Resolved cwd / command / trust of the running session (nil when stopped).
+--- @return string|nil cwd
+--- @return string|nil command
+--- @return table|nil trust
+function M.session_launch_info()
+  local session = require("pi.session")
+  return session.cwd(), session.command(), session.trust()
+end
+
+--- Sequential `vim.ui` questionnaire helper.
+local function ask(spec, questions, index, done)
+  if index > #questions then
+    return done(spec)
+  end
+  local question = questions[index]
+  local function next_step(value)
+    if value == nil then
+      return done(nil)
+    end
+    spec[question.field] = value
+    ask(spec, questions, index + 1, done)
+  end
+  if question.kind == "select" then
+    vim.ui.select(question.options, { prompt = question.prompt }, next_step)
+  else
+    vim.ui.input({ prompt = question.prompt, default = spec[question.field] or "" }, function(value)
+      if value == nil then
+        return done(nil)
+      end
+      spec[question.field] = value ~= "" and value or nil
+      ask(spec, questions, index + 1, done)
+    end)
+  end
+end
+
+--- Interactive launch builder: prompt for session/trust/model/tools/name, show
+--- the resolved command + cwd + trust, and start on confirmation.
+function M.start_dialog()
+  local launch = require("pi.launch")
+  local spec = vim.deepcopy(M.config.launch or {})
+  local cwd = launch.root(0, M.config.root_markers)
+
+  local questions = {
+    {
+      kind = "select",
+      field = "session",
+      prompt = "Session",
+      options = { "new", "continue", "resume", "none" },
+    },
+    {
+      kind = "select",
+      field = "approve",
+      prompt = "Project trust",
+      options = { "default", "approve", "no-approve" },
+    },
+    { kind = "input", field = "model", prompt = "Model (blank = default): " },
+    {
+      kind = "input",
+      field = "tools",
+      prompt = "Tools allowlist, comma-separated (blank = all): ",
+    },
+    { kind = "input", field = "name", prompt = "Session name (blank = none): " },
+  }
+
+  ask(spec, questions, 1, function(final)
+    if not final then
+      return
+    end
+    local trust = launch.trust(final, cwd)
+    local message = ("Start?\ncwd: %s\n%s\nproject-local resources: %s\ntrust: %s"):format(
+      cwd,
+      launch.describe(final),
+      trust.project_resources and "present" or "none",
+      trust.description
+    )
+    if vim.fn.confirm(message, "&Start\n&Cancel", 1) ~= 1 then
+      return
+    end
+    M.restart({ launch = final, cwd = cwd })
+  end)
 end
 
 return M
